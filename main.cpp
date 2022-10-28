@@ -4,6 +4,7 @@
 #include <mpi.h>
 #include <random>
 #include <cmath>
+#include <chrono>
 
 struct MyPoint {
     double x;
@@ -39,6 +40,7 @@ double count_function_value(double x, double y, double z) {
 
 void generate_points(double * points, long long count, std::uniform_real_distribution<double> unif, std::default_random_engine re) {
     for (long long i = 0; i < count * 3; i += 3) {
+//        std::cout << "Generating " << i << " point..." << std::endl;
         bool true_point = false;
 
         while(!true_point) {
@@ -57,7 +59,6 @@ void generate_points(double * points, long long count, std::uniform_real_distrib
 
 int main(int argc, char **argv) {
     int errCode;
-    double integral_value = count_analytic_integral();
 
     std::uniform_real_distribution<double> unif(0, 1);
     std::default_random_engine re;
@@ -70,21 +71,24 @@ int main(int argc, char **argv) {
     int rank, size;
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
-    double startTime = MPI_Wtime();
     long long workers_count = size - 1;
 //    long long points_single_worker_count = 100000000;
 //    long long points_count = points_single_worker_count * workers_count;
-    long long points_count = 1000000;
+    long long points_count = 10000000;
     long long points_single_worker_count = points_count / workers_count;
     points_count = points_single_worker_count * workers_count;
 
 //    std::cout << "Hello, MPI world! I am " << rank << " of " << size << std::endl;
 //    std::cout << "Integral value " <<  integral_value << std::endl;
 
-    double* points;
     if (rank == 0) {
-        points = static_cast<double *>(malloc(points_count * sizeof(double) + MPI_BSEND_OVERHEAD + 7));
+        double* points;
+//        std::cout << points_count << " " << sizeof(double) << " " << points_count * sizeof(double) + MPI_BSEND_OVERHEAD + 7 << std::endl;
+        points = (double *) malloc(points_count * 3 * sizeof(double) + MPI_BSEND_OVERHEAD + 7);
+//        std::cout << "generating points..." << std::endl;
         generate_points(points, points_count, unif, re);
+        double startTime = MPI_Wtime();
+//        std::cout << "Points generated." << std::endl;
 
 //        for (long long i = 0; i < points_count * 3; i += 3) {
 //            std::cout << "(" << points[i] << ", " << points[i + 1] << ", " << points[i + 2] << ")";
@@ -112,10 +116,13 @@ int main(int argc, char **argv) {
         double result = volume() * sum / (double)points_count;
         std::cout << "==============\nTOTAL RESULT::: " << result << std::endl << "EPS:" <<
             count_analytic_integral() - result << "\nTIME: " << time << "\n==============" << std::endl;
+        free(points);
     } else {
-        points = static_cast<double *>(malloc(points_single_worker_count * sizeof(double) + MPI_BSEND_OVERHEAD + 7));
+        double* points;
+        points = (double *) malloc(points_single_worker_count * 3 * sizeof(double) + MPI_BSEND_OVERHEAD + 7);
 //        std::cout << "Waiting for message..." << std::endl;
         MPI_Recv(points, points_single_worker_count * 3, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        double startTime = MPI_Wtime();
 //        std::cout << "Got message..." << std::endl;
         double sum = 0;
         for (long long i = 0; i < points_single_worker_count * 3; i += 3) {
@@ -123,11 +130,11 @@ int main(int argc, char **argv) {
             sum += count_function_value(points[i], points[i + 1], points[i + 2]);
         }
 //        std::cout << sum << std::endl;
-        MPI_Send(&sum, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
         double total_time = MPI_Wtime() - startTime;
+        MPI_Send(&sum, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
         MPI_Send(&total_time, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
+        free(points);
     }
-    free(points);
     MPI_Barrier(MPI_COMM_WORLD);
     MPI_Finalize();
 //    std::cout << "Finalise complete!" << std::endl;
