@@ -40,7 +40,6 @@ double count_function_value(double x, double y, double z) {
 
 void generate_points(double * points, long long count, std::uniform_real_distribution<double> unif, std::default_random_engine re) {
     for (long long i = 0; i < count * 3; i += 3) {
-//        std::cout << "Generating " << i << " point..." << std::endl;
         bool true_point = false;
 
         while(!true_point) {
@@ -72,29 +71,15 @@ int main(int argc, char **argv) {
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Comm_size(MPI_COMM_WORLD, &size);
     long long workers_count = size - 1;
-//    long long points_single_worker_count = 100000000;
-//    long long points_count = points_single_worker_count * workers_count;
     long long points_count = 10000000;
     long long points_single_worker_count = points_count / workers_count;
     points_count = points_single_worker_count * workers_count;
 
-//    std::cout << "Hello, MPI world! I am " << rank << " of " << size << std::endl;
-//    std::cout << "Integral value " <<  integral_value << std::endl;
-
     if (rank == 0) {
         double* points;
-//        std::cout << points_count << " " << sizeof(double) << " " << points_count * sizeof(double) + MPI_BSEND_OVERHEAD + 7 << std::endl;
         points = (double *) malloc(points_count * 3 * sizeof(double) + MPI_BSEND_OVERHEAD + 7);
-//        std::cout << "generating points..." << std::endl;
         generate_points(points, points_count, unif, re);
         double startTime = MPI_Wtime();
-//        std::cout << "Points generated." << std::endl;
-
-//        for (long long i = 0; i < points_count * 3; i += 3) {
-//            std::cout << "(" << points[i] << ", " << points[i + 1] << ", " << points[i + 2] << ")";
-//            std::cout << count_function_value(points[i], points[i + 1], points[i + 2]) << std::endl;
-//        }
-//        MPI_Barrier(MPI_COMM_WORLD);
 
         for (long long process_num = 0; process_num < workers_count; ++process_num) {
             MPI_Send(&points[process_num * points_single_worker_count * 3], points_single_worker_count * 3, MPI_DOUBLE, process_num + 1, 0, MPI_COMM_WORLD);
@@ -120,16 +105,12 @@ int main(int argc, char **argv) {
     } else {
         double* points;
         points = (double *) malloc(points_single_worker_count * 3 * sizeof(double) + MPI_BSEND_OVERHEAD + 7);
-//        std::cout << "Waiting for message..." << std::endl;
         MPI_Recv(points, points_single_worker_count * 3, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         double startTime = MPI_Wtime();
-//        std::cout << "Got message..." << std::endl;
         double sum = 0;
         for (long long i = 0; i < points_single_worker_count * 3; i += 3) {
-//            std::cout << "(" << points[i] << ", " << points[i + 1] << ", " << points[i + 2] << ")";
             sum += count_function_value(points[i], points[i + 1], points[i + 2]);
         }
-//        std::cout << sum << std::endl;
         double total_time = MPI_Wtime() - startTime;
         MPI_Send(&sum, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
         MPI_Send(&total_time, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
@@ -137,6 +118,5 @@ int main(int argc, char **argv) {
     }
     MPI_Barrier(MPI_COMM_WORLD);
     MPI_Finalize();
-//    std::cout << "Finalise complete!" << std::endl;
     return 0;
 }
